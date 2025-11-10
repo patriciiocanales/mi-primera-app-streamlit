@@ -3,7 +3,8 @@ import sqlite3
 import json
 import ast
 import time
-from utils.google_books_api import buscar_libros  # asegúrate que exista esta función
+from utils.google_books_api import buscar_libros
+from streamlit_sortables import sort_items  # Drag & Drop
 
 # --- CONFIGURACIÓN DE PÁGINA ---
 st.set_page_config(page_title="Mi Perfil | Red de Libros", page_icon="📚", layout="wide")
@@ -16,9 +17,11 @@ if "usuario" not in st.session_state:
 usuario = st.session_state["usuario"]
 user_id, nombre_usuario, correo = usuario[:3]
 
+
 # --- CONEXIÓN A LA BASE DE DATOS ---
 def conectar_db():
     return sqlite3.connect("data/usuarios.db", check_same_thread=False)
+
 
 # --- FUNCIONES AUXILIARES ---
 def obtener_listas(user_id):
@@ -31,14 +34,11 @@ def obtener_listas(user_id):
     def parsear_lista(campo, nombre_campo):
         if not campo:
             return []
-        # Intentar JSON
         try:
             return json.loads(campo)
         except json.JSONDecodeError:
-            # Intentar AST
             try:
                 lista = ast.literal_eval(campo)
-                # Reescribir como JSON válido
                 conn2 = conectar_db()
                 c2 = conn2.cursor()
                 c2.execute(f"UPDATE usuarios SET {nombre_campo} = ? WHERE id = ?", (json.dumps(lista), user_id))
@@ -60,8 +60,8 @@ def save_list_to_db(campo, lista):
     conn.commit()
     conn.close()
 
+
 def normalizar_libros(lista):
-    """Convierte strings antiguos en diccionarios válidos."""
     libros_normalizados = []
     for item in lista:
         if isinstance(item, str):
@@ -78,17 +78,35 @@ def normalizar_libros(lista):
             libros_normalizados.append(item)
     return libros_normalizados
 
+
 # --- CARGAR DATOS ---
 libros_gustados, libros_no_gustados = obtener_listas(user_id)
 libros_gustados = normalizar_libros(libros_gustados)
 libros_no_gustados = normalizar_libros(libros_no_gustados)
 
-# --- INTERFAZ ---
-st.title(f"📖 Perfil de {nombre_usuario}")
-st.markdown(f"**Correo:** {correo}")
+
+# --- CABECERA Y BOTÓN DE REORDENAR ---
+col_titulo, col_boton = st.columns([4, 1])
+with col_titulo:
+    st.title(f"📖 Perfil de {nombre_usuario}")
+    st.markdown(f"**Correo:** {correo}")
+with col_boton:
+    if "modo_reordenar" not in st.session_state:
+        st.session_state["modo_reordenar"] = False
+
+    if not st.session_state["modo_reordenar"]:
+        if st.button("⚙️ Cambiar orden", key="abrir_orden", help="Arrastra para reordenar tus listas"):
+            st.session_state["modo_reordenar"] = True
+            st.rerun()
+    else:
+        if st.button("❌ Cerrar", key="cerrar_orden", help="Salir del modo reordenar"):
+            st.session_state["modo_reordenar"] = False
+            st.rerun()
+
 st.divider()
 
-# --- FUNCIÓN PARA MOSTRAR LIBRO EN FORMATO CASCADA ---
+
+# --- FUNCIÓN PARA MOSTRAR LIBRO ---
 def mostrar_libro_cascada(libro, campo, idx):
     clave = f"{campo}_{idx}_{libro['titulo']}"
     with st.expander(f"{libro['titulo']} — {libro['autor']}"):
@@ -98,87 +116,92 @@ def mostrar_libro_cascada(libro, campo, idx):
         st.markdown(f"**Descripción:** {libro.get('descripcion', 'Sin descripción disponible.')}")
         st.markdown(f"[📘 Ver en Google Books]({libro.get('link', '#')})")
 
-        # --- REORDENAR ---
-        if st.session_state.get("modo_reordenar", False):
-            col_up, col_down = st.columns(2)
-            if col_up.button("⬆️ Subir", key=f"up_{clave}"):
-                lista = libros_gustados if campo == "libros_gustados" else libros_no_gustados
-                if idx > 0:
-                    lista[idx], lista[idx-1] = lista[idx-1], lista[idx]
+        # Confirmar eliminación
+        if st.session_state.get(f"confirmar_eliminar_{clave}", False):
+            st.warning(f"¿Seguro que quieres eliminar **{libro['titulo']}**?")
+            col1, col2 = st.columns(2)
+            with col1:
+                if st.button("✅ Sí, eliminar", key=f"sí_{clave}"):
+                    lista = libros_gustados if campo == "libros_gustados" else libros_no_gustados
+                    lista.remove(libro)
+                    save_list_to_db(campo, lista)
+                    st.success(f"'{libro['titulo']}' eliminado correctamente.")
+                    st.session_state[f"confirmar_eliminar_{clave}"] = False
                     st.rerun()
-            if col_down.button("⬇️ Bajar", key=f"down_{clave}"):
-                lista = libros_gustados if campo == "libros_gustados" else libros_no_gustados
-                if idx < len(lista) - 1:
-                    lista[idx], lista[idx+1] = lista[idx+1], lista[idx]
-                    st.rerun()
-        # --- ELIMINAR ---
+            with col2:
+                if st.button("❌ Cancelar", key=f"cancelar_{clave}"):
+                    st.session_state[f"confirmar_eliminar_{clave}"] = False
         else:
-            if st.session_state.get(f"confirmar_eliminar_{clave}", False):
-                st.warning(f"¿Seguro que quieres eliminar **{libro['titulo']}**?")
-                col1, col2 = st.columns(2)
-                with col1:
-                    if st.button("✅ Sí, eliminar", key=f"sí_{clave}"):
-                        lista = libros_gustados if campo == "libros_gustados" else libros_no_gustados
-                        lista.remove(libro)
-                        save_list_to_db(campo, lista)
-                        st.success(f"'{libro['titulo']}' eliminado correctamente.")
-                        st.session_state[f"confirmar_eliminar_{clave}"] = False
-                        st.rerun()
-                with col2:
-                    if st.button("❌ Cancelar", key=f"cancelar_{clave}"):
-                        st.session_state[f"confirmar_eliminar_{clave}"] = False
-            else:
-                if st.button("🗑️ Eliminar este libro", key=f"eliminar_{clave}"):
-                    st.session_state[f"confirmar_eliminar_{clave}"] = True
+            if st.button("🗑️ Eliminar este libro", key=f"eliminar_{clave}"):
+                st.session_state[f"confirmar_eliminar_{clave}"] = True
 
 
 # --- SECCIONES DE LIBROS ---
-col1, col2 = st.columns(2)
-with col1:
-    st.subheader("💖 Libros que te gustaron")
-    if libros_gustados:
-        for idx, libro in enumerate(libros_gustados):
-            mostrar_libro_cascada(libro, "libros_gustados", idx)
-    else:
-        st.info("Aún no has indicado qué libros te gustaron.")
-
-with col2:
-    st.subheader("💢 Libros que no te gustaron")
-    if libros_no_gustados:
-        for idx, libro in enumerate(libros_no_gustados):
-            mostrar_libro_cascada(libro, "libros_no_gustados", idx)
-    else:
-        st.info("Aún no has indicado qué libros no te gustaron.")
-
-st.divider()
-
-# --- MODO CAMBIAR ORDEN ---
-st.subheader("⚙️ Personalizar orden de tus libros")
-
-if "modo_reordenar" not in st.session_state:
-    st.session_state["modo_reordenar"] = False
-
 if not st.session_state["modo_reordenar"]:
-    if st.button("⚙️ Cambiar orden", use_container_width=True):
-        st.session_state["modo_reordenar"] = True
-        st.rerun()
+    col1, col2 = st.columns(2)
+    with col1:
+        st.subheader("💖 Libros que te gustaron")
+        if libros_gustados:
+            for idx, libro in enumerate(libros_gustados):
+                mostrar_libro_cascada(libro, "libros_gustados", idx)
+        else:
+            st.info("Aún no has indicado qué libros te gustaron.")
+    with col2:
+        st.subheader("💢 Libros que no te gustaron")
+        if libros_no_gustados:
+            for idx, libro in enumerate(libros_no_gustados):
+                mostrar_libro_cascada(libro, "libros_no_gustados", idx)
+        else:
+            st.info("Aún no has indicado qué libros no te gustaron.")
+
 else:
-    st.info("Usa los botones ↑ ↓ para cambiar el orden de tus libros.")
+    st.info("👉 Arrastra los libros para reordenarlos o moverlos entre listas (vertical).")
+
+    gustados_items = {
+        'header': '💖 Libros que te gustaron',
+        'items': [libro["titulo"] for libro in libros_gustados]
+    }
+    no_gustados_items = {
+        'header': '💢 Libros que no te gustaron',
+        'items': [libro["titulo"] for libro in libros_no_gustados]
+    }
+
+    sorted_result = sort_items(
+        [gustados_items, no_gustados_items],
+        multi_containers=True,
+        direction="vertical"
+    )
+
     col_confirm, col_cancel = st.columns(2)
     with col_confirm:
         if st.button("✅ Confirmar cambios", use_container_width=True):
-            save_list_to_db("libros_gustados", libros_gustados)
-            save_list_to_db("libros_no_gustados", libros_no_gustados)
+            nuevos_gustados, nuevos_no_gustados = [], []
+
+            # Extrae los libros ordenados y movidos
+            for titulo in sorted_result[0]["items"]:
+                for libro in libros_gustados + libros_no_gustados:
+                    if libro["titulo"] == titulo:
+                        nuevos_gustados.append(libro)
+
+            for titulo in sorted_result[1]["items"]:
+                for libro in libros_gustados + libros_no_gustados:
+                    if libro["titulo"] == titulo:
+                        nuevos_no_gustados.append(libro)
+
+            save_list_to_db("libros_gustados", nuevos_gustados)
+            save_list_to_db("libros_no_gustados", nuevos_no_gustados)
             st.success("✔️ Cambios guardados exitosamente.")
             st.session_state["modo_reordenar"] = False
             time.sleep(0.5)
             st.rerun()
+
     with col_cancel:
         if st.button("❌ Cancelar", use_container_width=True):
             st.session_state["modo_reordenar"] = False
             st.rerun()
 
 st.divider()
+
 
 # --- BUSCAR Y AÑADIR LIBROS ---
 st.header("➕ Añadir libro")
@@ -213,7 +236,8 @@ with st.expander("🔍 Buscar libro para añadir"):
         else:
             st.warning("No se encontraron resultados. Puedes añadirlo manualmente abajo 👇")
 
-# --- AÑADIR LIBRO MANUALMENTE ---
+
+# --- AÑADIR MANUALMENTE ---
 with st.expander("✍️ Añadir libro manualmente"):
     with st.form("manual_add"):
         titulo_manual = st.text_input("Título del libro")
@@ -257,9 +281,9 @@ with st.expander("✍️ Añadir libro manualmente"):
             st.warning(f"'{titulo_manual}' añadido a 'No me gustó'.")
             st.rerun()
 
-st.divider()
 
 # --- ANÁLISIS DE GUSTOS ---
+st.divider()
 st.header("📊 Análisis de tus gustos")
 if libros_gustados:
     from collections import Counter
@@ -272,6 +296,8 @@ if libros_gustados:
 else:
     st.info("Aún no hay suficientes datos para analizar tus gustos.")
 
+
+# --- FORO ---
 st.divider()
 st.header("💬 Mis publicaciones en el foro")
 st.info("Aquí aparecerán tus posts cuando el foro esté habilitado.")
