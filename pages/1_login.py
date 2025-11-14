@@ -2,9 +2,13 @@ import streamlit as st
 import sqlite3
 import hashlib
 import uuid
+from streamlit_cookies_controller import CookieController
 
 # --- CONFIGURACIÓN DE LA PÁGINA ---
 st.set_page_config(page_title="Login | Red de Libros", page_icon="🔐", layout="centered")
+
+# --- CONTROLADOR DE COOKIES ---
+cookies = CookieController()
 
 # --- CONEXIÓN A LA BASE DE DATOS ---
 conn = sqlite3.connect("data/usuarios.db")
@@ -35,7 +39,43 @@ def verificar_usuario(correo, contrasena):
         return user
     return None
 
-# --- INTERFAZ ---
+def obtener_usuario_por_correo(correo):
+    cursor.execute("SELECT * FROM usuarios WHERE correo = ?", (correo,))
+    return cursor.fetchone()
+
+
+# --- AUTOLOGIN CON COOKIE ---
+if "usuario" not in st.session_state:
+    try:
+        cookies_dict = cookies.getAll() or {}
+        correo_cookie = cookies_dict.get("correo", None)
+        if correo_cookie:
+            user = obtener_usuario_por_correo(correo_cookie)
+            if user:
+                st.session_state["usuario"] = user
+    except Exception as e:
+        st.warning(f"Error leyendo cookies: {e}")
+
+
+# --- SI YA ESTÁ LOGUEADO ---
+if "usuario" in st.session_state:
+    usuario = st.session_state["usuario"]
+    st.success(f"👋 Sesión activa: {usuario[1]} ({usuario[2]})")
+
+    if st.button("Cerrar sesión"):
+        try:
+            # elimina cookie de forma segura
+            cookies.remove("correo")
+            cookies.set("correo", "", max_age=0)
+        except Exception:
+            pass
+        st.session_state.clear()
+        st.rerun()
+
+    st.stop()
+
+
+# --- INTERFAZ DE LOGIN / REGISTRO ---
 st.title("🔐 Inicia sesión o crea tu cuenta")
 st.markdown("Bienvenido a **Red de Libros**, tu espacio para compartir y descubrir lecturas.")
 
@@ -45,14 +85,25 @@ opcion = st.radio("Selecciona una opción:", ["Iniciar sesión", "Registrarse"])
 if opcion == "Iniciar sesión":
     correo = st.text_input("Correo electrónico")
     contrasena = st.text_input("Contraseña", type="password")
+    recordar = st.checkbox("Recordar sesión")
 
     if st.button("Ingresar"):
         usuario = verificar_usuario(correo, contrasena)
         if usuario:
-            st.success(f"✅ Bienvenido de nuevo, {usuario[1]}!")
             st.session_state["usuario"] = usuario
+            st.success(f"✅ Bienvenido de nuevo, {usuario[1]}!")
+
+            # si marcó "recordar", guardamos cookie persistente
+            if recordar:
+                cookies.set("correo", correo, max_age=60 * 60 * 24 * 30)  # 30 días
+            else:
+                # si no, eliminar cualquier cookie previa
+                cookies.set("correo", "", max_age=0)
+
+            st.rerun()
         else:
             st.error("❌ Credenciales incorrectas o usuario no registrado.")
+
 
 # --- REGISTRO NUEVO ---
 else:
@@ -87,3 +138,4 @@ else:
 
 # --- CIERRE DE CONEXIÓN ---
 conn.close()
+# --- FIN DEL CÓDIGO ---

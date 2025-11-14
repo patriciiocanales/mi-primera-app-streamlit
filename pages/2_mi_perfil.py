@@ -4,24 +4,22 @@ import json
 import ast
 import time
 from utils.google_books_api import buscar_libros
-from streamlit_sortables import sort_items  # Drag & Drop
+from streamlit_sortables import sort_items
 
 # --- CONFIGURACIÓN DE PÁGINA ---
-st.set_page_config(page_title="Mi Perfil | Red de Libros", page_icon="📚", layout="wide")
+st.set_page_config(page_title="Mi Perfil", page_icon="📚", layout="wide")
 
 # --- VERIFICAR SESIÓN ---
 if "usuario" not in st.session_state:
-    st.warning("🔒 Debes iniciar sesión primero para acceder a tu perfil.")
+    st.warning(" Debes iniciar sesión primero para acceder a tu perfil.")
     st.stop()
 
 usuario = st.session_state["usuario"]
 user_id, nombre_usuario, correo = usuario[:3]
 
-
 # --- CONEXIÓN A LA BASE DE DATOS ---
 def conectar_db():
     return sqlite3.connect("data/usuarios.db", check_same_thread=False)
-
 
 # --- FUNCIONES AUXILIARES ---
 def obtener_listas(user_id):
@@ -52,14 +50,12 @@ def obtener_listas(user_id):
     libros_no_gustados = parsear_lista(datos[1], "libros_no_gustados") if datos else []
     return libros_gustados, libros_no_gustados
 
-
 def save_list_to_db(campo, lista):
     conn = conectar_db()
     c = conn.cursor()
     c.execute(f"UPDATE usuarios SET {campo} = ? WHERE id = ?", (json.dumps(lista), user_id))
     conn.commit()
     conn.close()
-
 
 def normalizar_libros(lista):
     libros_normalizados = []
@@ -78,35 +74,162 @@ def normalizar_libros(lista):
             libros_normalizados.append(item)
     return libros_normalizados
 
-
 # --- CARGAR DATOS ---
 libros_gustados, libros_no_gustados = obtener_listas(user_id)
 libros_gustados = normalizar_libros(libros_gustados)
 libros_no_gustados = normalizar_libros(libros_no_gustados)
 
+# --- INICIALIZACIÓN DE VARIABLES DE ESTADO ---
+if "editar_perfil" not in st.session_state:
+    st.session_state["editar_perfil"] = False
+if "modo_reordenar" not in st.session_state:
+    st.session_state["modo_reordenar"] = False
 
-# --- CABECERA Y BOTÓN DE REORDENAR ---
-col_titulo, col_boton = st.columns([4, 1])
-with col_titulo:
-    st.title(f"📖 Perfil de {nombre_usuario}")
-    st.markdown(f"**Correo:** {correo}")
-with col_boton:
-    if "modo_reordenar" not in st.session_state:
-        st.session_state["modo_reordenar"] = False
+# --- CABECERA DEL PERFIL CON BANNER Y FOTO ---
 
-    if not st.session_state["modo_reordenar"]:
-        if st.button("⚙️ Cambiar orden", key="abrir_orden", help="Arrastra para reordenar tus listas"):
-            st.session_state["modo_reordenar"] = True
-            st.rerun()
-    else:
-        if st.button("❌ Cerrar", key="cerrar_orden", help="Salir del modo reordenar"):
-            st.session_state["modo_reordenar"] = False
-            st.rerun()
+def asegurar_columnas_perfil():
+    conn = conectar_db()
+    c = conn.cursor()
+    c.execute("PRAGMA table_info(usuarios)")
+    columnas = [col[1] for col in c.fetchall()]
+    if "foto_perfil" not in columnas:
+        c.execute("ALTER TABLE usuarios ADD COLUMN foto_perfil TEXT DEFAULT ''")
+    if "banner_perfil" not in columnas:
+        c.execute("ALTER TABLE usuarios ADD COLUMN banner_perfil TEXT DEFAULT ''")
+    conn.commit()
+    conn.close()
 
-st.divider()
+asegurar_columnas_perfil()
+
+def obtener_perfil(user_id):
+    conn = conectar_db()
+    c = conn.cursor()
+    c.execute("SELECT nombre_usuario, correo, foto_perfil, banner_perfil FROM usuarios WHERE id = ?", (user_id,))
+    fila = c.fetchone()
+    conn.close()
+    if fila:
+        nombre, correo, foto, banner = fila
+        return {
+            "nombre": nombre or "@usuario",
+            "correo": correo,
+            "foto": foto or "https://placehold.co/150x150?text=Perfil",
+            "banner": banner or "https://placehold.co/1500x500?text=Banner+de+usuario"
+        }
+    return {"nombre": "@usuario", "correo": "", "foto": "", "banner": ""}
+
+def actualizar_perfil(user_id, nuevo_nombre, nueva_foto, nuevo_banner):
+    if not nuevo_nombre.startswith("@"):
+        nuevo_nombre = f"@{nuevo_nombre}"
+    conn = conectar_db()
+    c = conn.cursor()
+    c.execute(
+        "UPDATE usuarios SET nombre_usuario = ?, foto_perfil = ?, banner_perfil = ? WHERE id = ?",
+        (nuevo_nombre, nueva_foto, nuevo_banner, user_id)
+    )
+    conn.commit()
+    conn.close()
+
+perfil = obtener_perfil(user_id)
+
+# --- ESTILO VISUAL ---
+st.markdown(
+    """
+    <style>
+    .perfil-container {
+        position: relative;
+        border-radius: 16px;
+        overflow: hidden;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+        margin-bottom: 2rem;
+    }
+    .banner {
+        width: 100%;
+        height: 250px;
+        object-fit: cover;
+        border: none;
+    }
+    .foto-perfil {
+        position: absolute;
+        bottom: -50px;
+        left: 40px;
+        width: 120px;
+        height: 120px;
+        border-radius: 50%;
+        border: 2px solid black; /* más delgado y negro */
+        object-fit: cover;
+        background: #eee;
+    }
+    .info-perfil {
+        margin-top: 70px;
+        padding: 0 20px;
+    }
+    .nombre {
+        font-size: 1.5rem;
+        font-weight: 600;
+    }
+    .correo, .uuid {
+        color: #666;
+        font-size: 0.9rem;
+    }
+    .editar-btn {
+        position: absolute;
+        top: 15px;
+        right: 20px;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True
+)
+
+# --- RENDER PERFIL ---
+st.markdown('<div class="perfil-container">', unsafe_allow_html=True)
+st.markdown(f'<img src="{perfil["banner"]}" class="banner">', unsafe_allow_html=True)
+
+# Botón funcional en la esquina superior derecha
+editar_col = st.columns([0.8, 0.2])[1]
+with editar_col:
+    if st.button("✏️ Editar perfil"):
+        st.session_state["editar_perfil"] = True
+
+st.markdown(f'<img src="{perfil["foto"]}" class="foto-perfil">', unsafe_allow_html=True)
+st.markdown('</div>', unsafe_allow_html=True)
+
+# --- INFO DE PERFIL ---
+st.markdown(
+    f"""
+    <div class="info-perfil">
+        <div class="nombre">{perfil['nombre']}</div>
+        <div class="correo">📧 {perfil['correo']}</div>
+        <div class="uuid">UUID: <code>{user_id}</code></div>
+    </div>
+    """,
+    unsafe_allow_html=True
+)
+
+# --- MODO EDICIÓN ---
+if st.session_state["editar_perfil"]:
+    with st.expander("🪞 Editar perfil", expanded=True):
+        nuevo_nombre = st.text_input("Nuevo nombre de usuario", value=perfil["nombre"].replace("@", ""))
+        nueva_foto = st.text_input("Link de imagen de perfil", value=perfil["foto"])
+        nuevo_banner = st.text_input("Link de banner", value=perfil["banner"])
+        st.caption("💡 Sube tus imágenes a [Imgur](https://imgur.com/upload) y pega el link directo (.jpg o .png).")
+
+        col_guardar, col_cancelar = st.columns(2)
+        with col_guardar:
+            if st.button("💾 Guardar cambios"):
+                actualizar_perfil(user_id, nuevo_nombre.strip(), nueva_foto or "", nuevo_banner or "")
+                st.session_state["editar_perfil"] = False
+                st.success("✅ Perfil actualizado correctamente.")
+                time.sleep(0.5)
+                st.rerun()
+        with col_cancelar:
+            if st.button("❌ Cancelar"):
+                st.session_state["editar_perfil"] = False
+                st.rerun()
 
 
-# --- FUNCIÓN PARA MOSTRAR LIBRO ---
+
+# --- FUNCIÓN PARA MOSTRAR LIBROS ---
 def mostrar_libro_cascada(libro, campo, idx):
     clave = f"{campo}_{idx}_{libro['titulo']}"
     with st.expander(f"{libro['titulo']} — {libro['autor']}"):
@@ -116,7 +239,6 @@ def mostrar_libro_cascada(libro, campo, idx):
         st.markdown(f"**Descripción:** {libro.get('descripcion', 'Sin descripción disponible.')}")
         st.markdown(f"[📘 Ver en Google Books]({libro.get('link', '#')})")
 
-        # Confirmar eliminación
         if st.session_state.get(f"confirmar_eliminar_{clave}", False):
             st.warning(f"¿Seguro que quieres eliminar **{libro['titulo']}**?")
             col1, col2 = st.columns(2)
@@ -135,7 +257,6 @@ def mostrar_libro_cascada(libro, campo, idx):
             if st.button("🗑️ Eliminar este libro", key=f"eliminar_{clave}"):
                 st.session_state[f"confirmar_eliminar_{clave}"] = True
 
-
 # --- SECCIONES DE LIBROS ---
 if not st.session_state["modo_reordenar"]:
     col1, col2 = st.columns(2)
@@ -153,7 +274,6 @@ if not st.session_state["modo_reordenar"]:
                 mostrar_libro_cascada(libro, "libros_no_gustados", idx)
         else:
             st.info("Aún no has indicado qué libros no te gustaron.")
-
 else:
     st.info("👉 Arrastra los libros para reordenarlos o moverlos entre listas (vertical).")
 
@@ -166,18 +286,13 @@ else:
         'items': [libro["titulo"] for libro in libros_no_gustados]
     }
 
-    sorted_result = sort_items(
-        [gustados_items, no_gustados_items],
-        multi_containers=True,
-        direction="vertical"
-    )
+    sorted_result = sort_items([gustados_items, no_gustados_items], multi_containers=True, direction="vertical")
 
     col_confirm, col_cancel = st.columns(2)
     with col_confirm:
-        if st.button("✅ Confirmar cambios", use_container_width=True):
+        if st.button("✅ Confirmar cambios"):
             nuevos_gustados, nuevos_no_gustados = [], []
 
-            # Extrae los libros ordenados y movidos
             for titulo in sorted_result[0]["items"]:
                 for libro in libros_gustados + libros_no_gustados:
                     if libro["titulo"] == titulo:
@@ -196,12 +311,11 @@ else:
             st.rerun()
 
     with col_cancel:
-        if st.button("❌ Cancelar", use_container_width=True):
+        if st.button("❌ Cancelar"):
             st.session_state["modo_reordenar"] = False
             st.rerun()
 
 st.divider()
-
 
 # --- BUSCAR Y AÑADIR LIBROS ---
 st.header("➕ Añadir libro")
@@ -235,7 +349,6 @@ with st.expander("🔍 Buscar libro para añadir"):
                             st.rerun()
         else:
             st.warning("No se encontraron resultados. Puedes añadirlo manualmente abajo 👇")
-
 
 # --- AÑADIR MANUALMENTE ---
 with st.expander("✍️ Añadir libro manualmente"):
@@ -281,7 +394,6 @@ with st.expander("✍️ Añadir libro manualmente"):
             st.warning(f"'{titulo_manual}' añadido a 'No me gustó'.")
             st.rerun()
 
-
 # --- ANÁLISIS DE GUSTOS ---
 st.divider()
 st.header("📊 Análisis de tus gustos")
@@ -296,8 +408,77 @@ if libros_gustados:
 else:
     st.info("Aún no hay suficientes datos para analizar tus gustos.")
 
-
 # --- FORO ---
 st.divider()
 st.header("💬 Mis publicaciones en el foro")
-st.info("Aquí aparecerán tus posts cuando el foro esté habilitado.")
+
+def obtener_posts_usuario(user_id):
+    conn = conectar_db()
+    c = conn.cursor()
+    c.execute("""
+        SELECT contenido, fecha, imagen_url, libro_relacionado, likes
+        FROM posts
+        WHERE usuario_id = ?
+        ORDER BY datetime(fecha) DESC
+    """, (user_id,))
+    posts = c.fetchall()
+    conn.close()
+    return posts
+
+posts_usuario = obtener_posts_usuario(user_id)
+
+# --- ESTILO VISUAL IGUAL AL FORO ---
+st.markdown("""
+<style>
+.item-card {
+    background: rgba(255,255,255,0.07);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 16px;
+    padding: 15px 20px;
+    margin-bottom: 12px;
+    transition: background 0.3s ease, transform 0.2s ease;
+    color: white;
+}
+.item-card:hover {
+    background: rgba(255,255,255,0.1);
+    transform: translateY(-2px);
+}
+.feed-avatar {
+    border-radius: 50%;
+}
+</style>
+""", unsafe_allow_html=True)
+
+if not posts_usuario:
+    st.info("Aún no has publicado nada en el foro.")
+else:
+    for contenido, fecha, imagen, libro, likes in posts_usuario:
+        st.markdown(
+            f"""
+            <div class="item-card">
+                <div style="display:flex;gap:10px;align-items:center;">
+                    <img src="{perfil['foto']}" width="50" class="feed-avatar">
+                    <div>
+                        <b>{perfil['nombre']}</b><br>
+                        <span style="font-size:13px;opacity:0.7;">{fecha}</span>
+                    </div>
+                </div>
+                <div style="margin-top:8px;">{contenido}</div>
+            """,
+            unsafe_allow_html=True
+        )
+
+        # --- Imagen o video del post ---
+        if imagen:
+            if any(ext in imagen for ext in [".mp4", ".webm"]):
+                st.video(imagen)
+            else:
+                st.image(imagen, width=225)
+
+        # --- Libro relacionado ---
+        if libro:
+            st.markdown(f"📖 <i>Relacionado con:</i> <b>{libro}</b>", unsafe_allow_html=True)
+
+        # --- Likes ---
+        st.markdown(f"<div style='opacity:0.8;margin-top:5px;'>👍 {likes} likes</div>", unsafe_allow_html=True)
+        st.markdown("</div><hr>", unsafe_allow_html=True)
