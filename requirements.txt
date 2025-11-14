@@ -1,8 +1,4 @@
 streamlit
 streamlit-cookies-manager
 streamlit_sortables
-json
-ast
-time
-utils.google_books_api
-streamlit_cookies_manager
+pillow
