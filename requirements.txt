@@ -1,7 +1,6 @@
 streamlit
 streamlit-cookies-manager
 streamlit_sortables
-sqlite3 
 json
 ast
 time
