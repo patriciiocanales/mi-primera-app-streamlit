@@ -3,3 +3,4 @@ streamlit-cookies-manager
 streamlit-cookies-controller
 streamlit_sortables
 pillow
+requests
