@@ -1,3 +1,7 @@
+import sys, os
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+sys.path.append(BASE_DIR)
+sys.path.append(os.path.join(BASE_DIR, "utils"))
 import streamlit as st
 import sqlite3
 import json
@@ -19,7 +23,14 @@ user_id, nombre_usuario, correo = usuario[:3]
 
 # --- CONEXIÓN A LA BASE DE DATOS ---
 def conectar_db():
-    return sqlite3.connect("data/usuarios.db", check_same_thread=False)
+    BASE_DIR = os.path.dirname(os.path.abspath(__file__))  # /pages
+    ROOT_DIR = os.path.dirname(BASE_DIR)  # sube a /
+    data_dir = os.path.join(ROOT_DIR, "data")
+    os.makedirs(data_dir, exist_ok=True)
+
+    ruta_db = os.path.join(data_dir, "usuarios.db")
+    return sqlite3.connect(ruta_db, check_same_thread=False)
+
 
 # --- FUNCIONES AUXILIARES ---
 def obtener_listas(user_id):
@@ -117,6 +128,22 @@ def obtener_perfil(user_id):
         }
     return {"nombre": "@usuario", "correo": "", "foto": "", "banner": ""}
 
+def obtener_stats_seguidores(user_id):
+    conn = conectar_db()
+    c = conn.cursor()
+
+    # Contar seguidores (usuarios que siguen a este)
+    c.execute("SELECT COUNT(*) FROM follows WHERE followed_id = ?", (user_id,))
+    seguidores = c.fetchone()[0]
+
+    # Contar seguidos (usuarios que este sigue)
+    c.execute("SELECT COUNT(*) FROM follows WHERE follower_id = ?", (user_id,))
+    seguidos = c.fetchone()[0]
+
+    conn.close()
+
+    return seguidores, seguidos  # ← Corregido: quitado el return recursivo
+
 def actualizar_perfil(user_id, nuevo_nombre, nueva_foto, nuevo_banner):
     if not nuevo_nombre.startswith("@"):
         nuevo_nombre = f"@{nuevo_nombre}"
@@ -130,6 +157,9 @@ def actualizar_perfil(user_id, nuevo_nombre, nueva_foto, nuevo_banner):
     conn.close()
 
 perfil = obtener_perfil(user_id)
+
+# ← Agregado: definir seguidores y seguidos después de obtener perfil
+seguidores, seguidos = obtener_stats_seguidores(user_id)
 
 # --- ESTILO VISUAL ---
 st.markdown(
@@ -201,6 +231,7 @@ st.markdown(
         <div class="nombre">{perfil['nombre']}</div>
         <div class="correo">📧 {perfil['correo']}</div>
         <div class="uuid">UUID: <code>{user_id}</code></div>
+        <div class="correo">👥 Seguidores: <b>{seguidores}</b> — Siguiendo: <b>{seguidos}</b></div>
     </div>
     """,
     unsafe_allow_html=True
@@ -226,8 +257,6 @@ if st.session_state["editar_perfil"]:
             if st.button("❌ Cancelar"):
                 st.session_state["editar_perfil"] = False
                 st.rerun()
-
-
 
 # --- FUNCIÓN PARA MOSTRAR LIBROS ---
 def mostrar_libro_cascada(libro, campo, idx):
@@ -406,79 +435,5 @@ if libros_gustados:
     st.success(f"💡 Te gustan especialmente los libros de **{autor_fav}**.")
     st.info(f"🏢 Sueles disfrutar libros publicados por **{editorial_fav}**.")
 else:
-    st.info("Aún no hay suficientes datos para analizar tus gustos.")
+    st.info("Añade libros a tu lista de 'Me gustó' para ver un análisis de tus gustos aquí.")
 
-# --- FORO ---
-st.divider()
-st.header("💬 Mis publicaciones en el foro")
-
-def obtener_posts_usuario(user_id):
-    conn = conectar_db()
-    c = conn.cursor()
-    c.execute("""
-        SELECT contenido, fecha, imagen_url, libro_relacionado, likes
-        FROM posts
-        WHERE usuario_id = ?
-        ORDER BY datetime(fecha) DESC
-    """, (user_id,))
-    posts = c.fetchall()
-    conn.close()
-    return posts
-
-posts_usuario = obtener_posts_usuario(user_id)
-
-# --- ESTILO VISUAL IGUAL AL FORO ---
-st.markdown("""
-<style>
-.item-card {
-    background: rgba(255,255,255,0.07);
-    border: 1px solid rgba(255,255,255,0.1);
-    border-radius: 16px;
-    padding: 15px 20px;
-    margin-bottom: 12px;
-    transition: background 0.3s ease, transform 0.2s ease;
-    color: white;
-}
-.item-card:hover {
-    background: rgba(255,255,255,0.1);
-    transform: translateY(-2px);
-}
-.feed-avatar {
-    border-radius: 50%;
-}
-</style>
-""", unsafe_allow_html=True)
-
-if not posts_usuario:
-    st.info("Aún no has publicado nada en el foro.")
-else:
-    for contenido, fecha, imagen, libro, likes in posts_usuario:
-        st.markdown(
-            f"""
-            <div class="item-card">
-                <div style="display:flex;gap:10px;align-items:center;">
-                    <img src="{perfil['foto']}" width="50" class="feed-avatar">
-                    <div>
-                        <b>{perfil['nombre']}</b><br>
-                        <span style="font-size:13px;opacity:0.7;">{fecha}</span>
-                    </div>
-                </div>
-                <div style="margin-top:8px;">{contenido}</div>
-            """,
-            unsafe_allow_html=True
-        )
-
-        # --- Imagen o video del post ---
-        if imagen:
-            if any(ext in imagen for ext in [".mp4", ".webm"]):
-                st.video(imagen)
-            else:
-                st.image(imagen, width=225)
-
-        # --- Libro relacionado ---
-        if libro:
-            st.markdown(f"📖 <i>Relacionado con:</i> <b>{libro}</b>", unsafe_allow_html=True)
-
-        # --- Likes ---
-        st.markdown(f"<div style='opacity:0.8;margin-top:5px;'>👍 {likes} likes</div>", unsafe_allow_html=True)
-        st.markdown("</div><hr>", unsafe_allow_html=True)

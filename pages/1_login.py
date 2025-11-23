@@ -9,6 +9,8 @@ st.set_page_config(page_title="Login | Red de Libros", page_icon="🔐", layout=
 
 # --- CONTROLADOR DE COOKIES ---
 cookies = CookieController()
+# Inicializar cookies para evitar errores (asegura que __cookies no sea None)
+cookies.getAll()
 
 # --- CONEXIÓN A LA BASE DE DATOS ---
 conn = sqlite3.connect("data/usuarios.db")
@@ -43,9 +45,8 @@ def obtener_usuario_por_correo(correo):
     cursor.execute("SELECT * FROM usuarios WHERE correo = ?", (correo,))
     return cursor.fetchone()
 
-
-# --- AUTOLOGIN CON COOKIE ---
-if "usuario" not in st.session_state:
+# --- AUTOLOGIN CON COOKIE (solo si no se acaba de cerrar sesión) ---
+if "usuario" not in st.session_state and "cerrar_sesion" not in st.session_state:
     try:
         cookies_dict = cookies.getAll() or {}
         correo_cookie = cookies_dict.get("correo", None)
@@ -56,7 +57,6 @@ if "usuario" not in st.session_state:
     except Exception as e:
         st.warning(f"Error leyendo cookies: {e}")
 
-
 # --- SI YA ESTÁ LOGUEADO ---
 if "usuario" in st.session_state:
     usuario = st.session_state["usuario"]
@@ -64,16 +64,17 @@ if "usuario" in st.session_state:
 
     if st.button("Cerrar sesión"):
         try:
-            # elimina cookie de forma segura
-            cookies.remove("correo")
+            # Expira la cookie inmediatamente
             cookies.set("correo", "", max_age=0)
-        except Exception:
-            pass
+        except Exception as e:
+            st.warning(f"Error eliminando cookie: {e}")
+        # Limpia la sesión
         st.session_state.clear()
+        # Marca que se cerró sesión para evitar autologin inmediato
+        st.session_state["cerrar_sesion"] = True
         st.rerun()
 
     st.stop()
-
 
 # --- INTERFAZ DE LOGIN / REGISTRO ---
 st.title("🔐 Inicia sesión o crea tu cuenta")
@@ -93,17 +94,18 @@ if opcion == "Iniciar sesión":
             st.session_state["usuario"] = usuario
             st.success(f"✅ Bienvenido de nuevo, {usuario[1]}!")
 
-            # si marcó "recordar", guardamos cookie persistente
-            if recordar:
-                cookies.set("correo", correo, max_age=60 * 60 * 24 * 30)  # 30 días
-            else:
-                # si no, eliminar cualquier cookie previa
-                cookies.set("correo", "", max_age=0)
+            try:
+                # Si marcó "recordar", guarda cookie persistente; si no, expira inmediatamente
+                if recordar:
+                    cookies.set("correo", correo, max_age=60 * 60 * 24 * 30)  # 30 días
+                else:
+                    cookies.set("correo", "", max_age=0)  # Expira ahora
+            except Exception as e:
+                st.warning(f"Error guardando cookie: {e}")
 
             st.rerun()
         else:
             st.error("❌ Credenciales incorrectas o usuario no registrado.")
-
 
 # --- REGISTRO NUEVO ---
 else:
