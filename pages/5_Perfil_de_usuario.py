@@ -20,7 +20,7 @@ if "usuario" not in st.session_state:
 user_id = st.session_state.get("usuario_id_a_ver")
 if not user_id:
     st.error("No se seleccionó un perfil válido. Redirigiendo al foro...")
-    st.switch_page("pages/4_foro.py")
+    st.switch_page("pages/4_Foro.py")
 
 # --- CONEXIÓN A LA BASE DE DATOS ---
 def conectar_db():
@@ -80,7 +80,7 @@ fila = c.fetchone()
 conn.close()
 if not fila:
     st.error("Usuario no encontrado. Redirigiendo al foro...")
-    st.switch_page("pages/4_foro.py")
+    st.switch_page("pages/4_Foro.py")
 
 nombre_usuario, correo, foto_perfil, banner_perfil = fila
 foto_perfil = foto_perfil or "https://placehold.co/150x150?text=Perfil"
@@ -145,7 +145,7 @@ def dejar_de_seguir(mi_id, user_id):
 col_volver, _ = st.columns([0.1, 0.9])
 with col_volver:
     if st.button("← Volver al Foro"):
-        st.switch_page("pages/4_foro.py")
+        st.switch_page("pages/4_Foro.py")
 
 # --- ESTILO VISUAL ---
 st.markdown(
