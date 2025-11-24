@@ -34,7 +34,7 @@ with col1:
     if img_path.exists():
         st.image(str(img_path), width=220)
     else:
-        st.warning("No se encontró la imagen del creador.")
+        st.warning("No se encuentra disponible la foto del creador.")
 with col2:
     st.markdown("""
     "Hola, soy **Patricio Canales**, el creador de Red de Libros.  
