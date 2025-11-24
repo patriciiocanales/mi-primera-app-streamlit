@@ -182,7 +182,7 @@ def render_posts(posts, tab_key):
         with col2:
             if st.button(nombre, key=f"perfil_{tab_key}_{pid}"):
                 st.session_state["usuario_id_a_ver"] = autor_id
-                st.switch_page("pages/5_perfil_de_usuario.py")
+                st.switch_page("pages/5_Perfil_de_usuario.py")
             st.markdown(f"<span style='font-size:13px;opacity:0.7;'>{fecha}</span>", unsafe_allow_html=True)
 
         # Contenido del post
