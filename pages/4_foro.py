@@ -235,7 +235,7 @@ with col_left:
         """, unsafe_allow_html=True)
 
     # Título con conteo real
-    st.markdown(f'<div class="subheader">👥 Quienes Sigues ({len(seguidos_ids)})</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="subheader">👥 Quienes sigues ({len(seguidos_ids)})</div>', unsafe_allow_html=True)
 
     if not seguidos_ids:
         st.info("Aún no sigues a nadie. ¡Empieza a seguir usuarios!")
