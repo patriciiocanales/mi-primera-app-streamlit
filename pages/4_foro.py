@@ -224,7 +224,7 @@ col_left, col_center, col_right = st.columns([2, 5, 2])
 
 # === COLUMNA IZQUIERDA ===
 with col_left:
-    st.markdown('<div class="subheader">🕮 Últimos Posts Visitados</div>', unsafe_allow_html=True)
+    st.markdown('<div class="subheader"> Últimos posts visitados</div>', unsafe_allow_html=True)
     recent_posts = cursor.execute("SELECT contenido, fecha FROM posts ORDER BY id DESC LIMIT 2").fetchall()
     for post in recent_posts:
         st.markdown(f"""
@@ -349,20 +349,20 @@ with col_center:
                     render_posts(posts, "seg")
 
         with tab3:  # === TENDENCIAS ===
-            st.write("Contenido para Tendencias (igual que Descubrir por ahora)")
+            st.write("Contenido para Tendencias (en construcción), yo creo que lo eliminaré si no funciona")
 
 # === COLUMNA DERECHA ===
 with col_right:
-    st.markdown('<div class="subheader">🔍 Buscar Tema, Libro o Autor</div>', unsafe_allow_html=True)
+    st.markdown('<div class="subheader">🔍 Buscar tema, libro o autor</div>', unsafe_allow_html=True)
     search_query = st.text_input("", placeholder="Buscar...")
     if st.button("Buscar"):
         st.info(f"Buscando: {search_query}")
 
     st.markdown("<hr>", unsafe_allow_html=True)
-    st.markdown('<div class="subheader">Actividad de Amigos</div>', unsafe_allow_html=True)
+    st.markdown('<div class="subheader">Actividad de amigos</div>', unsafe_allow_html=True)
 
     # Botón para refrescar manualmente la actividad
-    if st.button("🔄 Refrescar Actividad", key="refresh_actividad"):
+    if st.button("🔄 Refrescar actividad", key="refresh_actividad"):
         st.rerun()
 
     if not seguidos_ids:
