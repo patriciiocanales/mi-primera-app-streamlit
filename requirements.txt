@@ -4,3 +4,5 @@ streamlit-cookies-controller
 streamlit_sortables
 pillow
 requests
+pathlib
+utils.google_books_api
