@@ -9,19 +9,24 @@ st.set_page_config(
 
 # TÍTULO PRINCIPAL
 st.title("🏠 Bienvenido a Red de Libros")
-st.markdown("""
-Imagina un lugar donde los amantes de la lectura pueden conectarse, compartir sus libros favoritos
-y descubrir nuevas historias juntos.  
-¡Eso es exactamente lo que ofrecemos en **Red de Libros**! 📖✨
+st.markdown(
+    """
+    <div style="text-align: justify;">
+    Imagina un lugar donde los amantes de la lectura pueden conectarse, compartir sus libros favoritos
+    y descubrir nuevas historias juntos.  
+    ¡Eso es exactamente lo que ofrecemos en <b>Red de Libros</b>! 📖✨
 
-Aquí puedes crear tu perfil de lector, unirte a clubes de lectura, participar en discusiones literarias
-y mucho más.
+    Aquí puedes crear tu perfil de lector, unirte a clubes de lectura, participar en discusiones literarias
+    y mucho más.
 
-Ya seas un ávido lector o alguien que está buscando su próxima gran aventura literaria,
-nuestra comunidad está aquí para ti.
+    Ya seas un ávido lector o alguien que está buscando su próxima gran aventura literaria,
+    nuestra comunidad está aquí para ti.
 
-¿Listo para comenzar tu viaje de lectura con nosotros? 🚀
-""")
+    ¿Listo para comenzar tu viaje de lectura con nosotros? 🚀
+    </div>
+    """,
+    unsafe_allow_html=True
+)
 
 st.markdown("---")
 
@@ -36,12 +41,17 @@ with col1:
     else:
         st.warning("No se encuentra disponible la foto del creador.")
 with col2:
-    st.markdown("""
-    "Hola, soy **Patricio Canales**, el creador de Red de Libros.  
-    Soy un apasionado de la lectura. Esta plataforma nació de mi deseo
-    de conectar con otros amantes de los libros y compartir nuestras experiencias literarias.
-    Espero que disfrutes usando **Red de Libros** tanto como yo disfruté creándola."
-    """)
+    st.markdown(
+        """
+        <div style="text-align: justify;">
+        "Hola, soy <b>Patricio Canales</b>, el creador de Red de Libros.  
+        Soy un apasionado de la lectura. Esta plataforma nació de mi deseo
+        de conectar con otros amantes de los libros y compartir nuestras experiencias literarias.
+        Espero que disfrutes usando <b>Red de Libros</b> tanto como yo disfruté creándola."
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
 
 st.markdown("---")
 
